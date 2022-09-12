@@ -7,10 +7,16 @@ import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.util.concurrent.TimeUnit;
+
+import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
+import static com.hmdp.utils.RedisConstants.CACHE_SHOP_TTL;
 
 /**
  * <p>
@@ -26,9 +32,12 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Resource(name = "stringRedisTemplate")
     ValueOperations<String, String> valueOperations;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
     @Override
     public Result findById(Long id) {
-        String key = "cache:shop:" + id;
+        String key = CACHE_SHOP_KEY + id;
         // visit cache
         String shopJson = valueOperations.get(key);
         if (StrUtil.isNotBlank(shopJson)) {
@@ -40,7 +49,20 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return Result.fail("店铺不存在");
         }
         shopJson = JSONUtil.toJsonStr(shop);
-        valueOperations.set(key, shopJson);
+        // 30分钟后店铺信息的缓存失效，确保与数据库一致
+        valueOperations.set(key, shopJson, CACHE_SHOP_TTL, TimeUnit.MINUTES);
         return Result.ok(shop);
+    }
+
+    @Override
+    @Transactional
+    public Result update(Shop shop) {
+        Long id = shop.getId();
+        if(id == null) {
+            return Result.fail("Shop ID不能为空");
+        }
+        updateById(shop);
+        stringRedisTemplate.delete(CACHE_SHOP_KEY + id);
+        return Result.ok();
     }
 }
