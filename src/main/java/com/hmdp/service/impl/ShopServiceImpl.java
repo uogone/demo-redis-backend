@@ -2,11 +2,11 @@ package com.hmdp.service.impl;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
@@ -35,27 +35,53 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     private StringRedisTemplate stringRedisTemplate;
 
     @Override
+    @Transactional
     public Result findById(Long id) {
+        Shop shop = queryShopWithMutex(id);
+        if(shop == null) {
+            return Result.fail("店铺不存在");
+        }
+        return Result.ok(shop);
+    }
+
+    /**
+     * 用互斥锁解决缓存击穿
+     */
+    private Shop queryShopWithMutex(Long id) {
         String key = CACHE_SHOP_KEY + id;
         // visit cache
         String shopJson = valueOperations.get(key);
         if (StrUtil.isNotBlank(shopJson)) {
-            return Result.ok(JSONUtil.toBean(shopJson, Shop.class));
-        }
-        // 防止缓存穿透而保存的空值
-        if ("".equals(shopJson)) {
-            return Result.fail("店铺不存在");
+            return JSONUtil.toBean(shopJson, Shop.class);
+        } else if ("".equals(shopJson)) {
+            return null;
         }
         // visit db then cache
-        Shop shop = getById(id);
-        if (shop == null) {
-            valueOperations.set(CACHE_SHOP_KEY + id, "", CACHE_NULL_TTL, TimeUnit.MINUTES);
-            return Result.fail("店铺不存在");
+        Boolean ok = valueOperations.setIfAbsent(LOCK_SHOP_KEY + id, "1", LOCK_SHOP_TTL, TimeUnit.SECONDS);
+        if (Boolean.TRUE.equals(ok)) {
+            Shop shop = getById(id);
+            if (shop == null) {
+                valueOperations.set(key, "", CACHE_NULL_TTL, TimeUnit.MINUTES);
+            } else {
+                valueOperations.set(key, JSONUtil.toJsonStr(shop), CACHE_SHOP_TTL, TimeUnit.MINUTES);
+            }
+            return shop;
+        } else {
+            try {
+                TimeUnit.MILLISECONDS.sleep(50);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return queryShopWithMutex(id);
         }
-        shopJson = JSONUtil.toJsonStr(shop);
-        // 30分钟后店铺信息的缓存失效，确保与数据库一致
-        valueOperations.set(key, shopJson, CACHE_SHOP_TTL, TimeUnit.MINUTES);
-        return Result.ok(shop);
+    }
+
+    /**
+     * 逻辑过期防止缓存击穿
+     */
+    private Shop queryShopWithLogicExpire(Long id) {
+        // 先返回过期数据，再异步更新缓存
+        throw new UnsupportedOperationException("未实现");
     }
 
     @Override
