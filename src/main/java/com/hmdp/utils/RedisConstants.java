@@ -21,4 +21,6 @@ public class RedisConstants {
     public static final String USER_SIGN_KEY = "sign:";
 
     public static final Long LOCK_EXPIRE = 10L;
+
+    public static final String LOCK_SECKILL_KEY = "lock:seckill:";
 }

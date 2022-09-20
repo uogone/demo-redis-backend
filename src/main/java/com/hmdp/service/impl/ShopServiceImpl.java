@@ -29,7 +29,7 @@ import static com.hmdp.utils.RedisConstants.*;
 public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {
 
     @Resource(name = "stringRedisTemplate")
-    ValueOperations<String, String> valueOperations;
+    private ValueOperations<String, String> valueOperations;
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
