@@ -61,13 +61,13 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         String lockKey = LOCK_SECKILL_KEY + voucherId + ":" + userId;
         // 防止其他线程释放分布式锁，使用UUID标识，避免多个应用线程ID相同
         String threadId = UUID.randomUUID().toString();
+        Boolean locked = stringRedisTemplate
+                .opsForValue()
+                .setIfAbsent(lockKey, threadId, LOCK_EXPIRE, TimeUnit.SECONDS);
+        if (!Boolean.TRUE.equals(locked)) {
+            return Result.fail("稍后再试");
+        }
         try {
-            Boolean locked = stringRedisTemplate
-                    .opsForValue()
-                    .setIfAbsent(lockKey, threadId, LOCK_EXPIRE, TimeUnit.SECONDS);
-            if(Boolean.FALSE.equals(locked)) {
-                return Result.fail("稍后再试");
-            }
             // 检查一人一单
             Integer count = query().eq("voucher_id", voucherId).eq("user_id", userId).count();
             if (count > 0) {
