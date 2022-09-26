@@ -14,6 +14,8 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import static com.hmdp.utils.RedisConstants.USER_TOKEN_TTL;
+
 @Component
 public class RefreshTokenInterceptor implements HandlerInterceptor {
 
@@ -33,7 +35,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         if(userDTOMap.isEmpty()) {
             return true;
         }
-        stringRedisTemplate.expire("login:token:" + authToken, 30L, TimeUnit.MINUTES);
+        stringRedisTemplate.expire("login:token:" + authToken, USER_TOKEN_TTL, TimeUnit.MINUTES);
         UserDTO userDTO = new UserDTO();
         BeanUtil.fillBeanWithMap(userDTOMap, userDTO, false);
         UserHolder.saveUser(userDTO);
