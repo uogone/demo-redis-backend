@@ -25,7 +25,7 @@ public class RedisConstants {
 
     // seckill voucher
     public static final String SECKILL_INFO_KEY = "seckill:info:";
-    public static final String SUCCESS_USER_KEY = "seckill:success:";
+    public static final String SUCCESS_USER_KEY = "seckill:user:";
 
     // user status
     public static final Long USER_TOKEN_TTL = 120L;

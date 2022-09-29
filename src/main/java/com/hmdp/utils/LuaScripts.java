@@ -1,30 +1,15 @@
 package com.hmdp.utils;
 
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.scripting.support.ResourceScriptSource;
 
 public class LuaScripts {
 
-    public static final RedisScript<Long> CHECK_SECKILL_VOUCHER = new DefaultRedisScript<>(
-            "local userId = ARGV[1]\n" +
-            "local voucherKey = ARGV[2]\n" +
-            "local orderKey = ARGV[3]\n" +
-            "\n" +
-            "-- 检查库存\n" +
-            "if(tonumber(redis.call('hget', voucherKey, 'stock')) <= 0) then\n" +
-            "    return 1\n" +
-            "end\n" +
-            "\n" +
-            "-- 检查一人一单\n" +
-            "if(redis.call('sismember', orderKey, userId) == 1) then\n" +
-            "    return 2\n" +
-            "end\n" +
-            "\n" +
-            "-- 减库存\n" +
-            "redis.call('hincrby', voucherKey, 'stock', -1)\n" +
-            "\n" +
-            "-- 保存用户id\n" +
-            "redis.call('sadd', orderKey, userId)\n" +
-            "\n" +
-            "return 0", Long.class);
+    public static final DefaultRedisScript<Long> CHECK_SECKILL_VOUCHER = new DefaultRedisScript<>();
+
+    static {
+        CHECK_SECKILL_VOUCHER.setScriptSource(new ResourceScriptSource(new ClassPathResource("lua/秒杀券.lua")));
+        CHECK_SECKILL_VOUCHER.setResultType(Long.class);
+    }
 }

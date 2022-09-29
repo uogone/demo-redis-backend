@@ -1,5 +1,6 @@
 package com.hmdp.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.VoucherOrder;
@@ -9,20 +10,26 @@ import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.utils.LuaScripts;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.StreamOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static com.hmdp.utils.RedisConstants.SECKILL_INFO_KEY;
-import static com.hmdp.utils.RedisConstants.SUCCESS_USER_KEY;
 
 /**
  * <p>
@@ -33,6 +40,7 @@ import static com.hmdp.utils.RedisConstants.SUCCESS_USER_KEY;
  * @since 2021-12-22
  */
 @Service
+@Slf4j
 public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder> implements IVoucherOrderService {
 
     @Resource
@@ -48,6 +56,35 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @Resource(name = "stringRedisTemplate")
     private HashOperations<String, String, String> hashOperations;
+
+    @PostConstruct
+    public void init() {
+        StreamOperations<String, String, String> so = stringRedisTemplate.opsForStream();
+        so.createGroup("orders", ReadOffset.from("0"), "ordergroup");
+        executor.submit(() -> {
+           while (true) {
+               VoucherOrder order = null;
+               try {
+                   List<MapRecord<String, String, String>> msg = so.read(Consumer.from("ordergroup", "c1"),
+                           StreamReadOptions.empty().count(1).block(Duration.ZERO),
+                           StreamOffset.create("orders", ReadOffset.lastConsumed()));
+                   Map<String, String> values = msg.get(0).getValue();
+                   order = new VoucherOrder();
+                   BeanUtil.fillBeanWithMap(values, order, false);
+                   seckillVoucherService
+                           .update()
+                           .setSql("stock = stock - 1")
+                           .eq("voucher_id", order.getVoucherId())
+                           .update();
+                   save(order);
+                   so.acknowledge("ordergroup", msg.get(0));
+               } catch (Exception e) {
+                   log.error("保存订单失败：" + order);
+                   e.printStackTrace();
+               }
+           }
+        });
+    }
 
     @Override
     @Transactional
@@ -66,23 +103,15 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return Result.fail("秒杀已结束");
         }
         Long userId = UserHolder.getUser().getId();
+        Long orderId = redisIdWorker.nextId("order");
         // 检查查询时的库存
         Long result = stringRedisTemplate.execute(
                 LuaScripts.CHECK_SECKILL_VOUCHER,
                 Collections.emptyList(),
-                userId.toString(), SECKILL_INFO_KEY + voucherId, SUCCESS_USER_KEY + voucherId);
+                userId.toString(), voucherId.toString(), orderId.toString());
         if (result != 0) {
             return Result.fail(result == 1 ? "库存不足" : "你已拥有该优惠券");
         } else {
-            Long orderId = redisIdWorker.nextId("order");
-            executor.submit(() -> {
-                VoucherOrder order = new VoucherOrder();
-                order.setVoucherId(voucherId);
-                order.setId(orderId);
-                order.setUserId(userId);
-                seckillVoucherService.update().setSql("stock = stock - 1").eq("voucher_id", voucherId).update();
-                save(order);
-            });
             return Result.ok(orderId);
         }
     }
