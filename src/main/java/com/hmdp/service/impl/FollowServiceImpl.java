@@ -12,6 +12,7 @@ import com.hmdp.service.IFollowService;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.UserHolder;
 import org.springframework.data.redis.core.SetOperations;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -35,6 +36,9 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
 
     @Resource(name = "stringRedisTemplate")
     private SetOperations<String, String> setOperations;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     @Resource
     private IUserService userService;
@@ -61,12 +65,28 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
     @Override
     public Result followOrNot(Long id) {
         Long fansId = UserHolder.getUser().getId();
-        return Result.ok(setOperations.isMember(USER_FOLLOW_KEY + fansId, id.toString()));
+        String key = USER_FOLLOW_KEY + fansId;
+        checkCache(fansId);
+        return Result.ok(setOperations.isMember(key, id.toString()));
+    }
+
+    /**
+     * 检查是否缓存该用户的关注列表
+     * @param id 用户id
+     */
+    private void checkCache(Long id) {
+        String key = USER_FOLLOW_KEY + id;
+        if (!stringRedisTemplate.hasKey(key)) {
+            List<Follow> follows = query().eq("user_id", id).list();
+            follows.forEach(e -> setOperations.add(key, e.getFollowUserId().toString()));
+        }
     }
 
     @Override
     public Result commonFollows(Long id) {
         Long fansId = UserHolder.getUser().getId();
+        checkCache(id);
+        checkCache(fansId);
         Set<String> commonIds = setOperations.intersect(USER_FOLLOW_KEY + fansId, USER_FOLLOW_KEY + id);
         if (commonIds == null || commonIds.isEmpty()) {
             return Result.ok(Collections.emptyList());

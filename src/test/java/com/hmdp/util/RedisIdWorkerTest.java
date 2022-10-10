@@ -17,4 +17,6 @@ public class RedisIdWorkerTest {
         Long id = redisIdWorker.nextId("test");
         System.out.println(id);
     }
+
+
 }
