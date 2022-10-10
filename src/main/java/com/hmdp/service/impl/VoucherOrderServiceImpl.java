@@ -11,6 +11,7 @@ import com.hmdp.utils.LuaScripts;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StreamOperations;
@@ -60,7 +61,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @PostConstruct
     public void init() {
         StreamOperations<String, String, String> so = stringRedisTemplate.opsForStream();
-        so.createGroup("orders", ReadOffset.from("0"), "ordergroup");
+        try  {
+            so.createGroup("orders", ReadOffset.from("0"), "ordergroup");
+        } catch (Exception ignored) {
+
+        }
         executor.submit(() -> {
            while (true) {
                VoucherOrder order = null;
@@ -79,7 +84,10 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                    save(order);
                    so.acknowledge("ordergroup", msg.get(0));
                } catch (Exception e) {
-                   log.error("保存订单失败：" + order);
+                   if (e instanceof QueryTimeoutException) {
+                       continue;
+                   }
+                   log.error("保存订单失败：{}", order);
                    e.printStackTrace();
                }
            }
