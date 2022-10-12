@@ -11,6 +11,7 @@ import com.hmdp.utils.UserHolder;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -83,4 +84,11 @@ public class BlogController {
         return Result.ok(records);
     }
 
+    @GetMapping("/of/follow")
+    public Result queryBlogOfFollowee() {
+        Result result = blogService.readNewBlogOfFollowee();
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("list", result.getData());
+        return Result.ok(map);
+    }
 }

@@ -10,6 +10,7 @@ import com.hmdp.entity.Blog;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.BlogMapper;
 import com.hmdp.service.IBlogService;
+import com.hmdp.service.IFollowService;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.SystemConstants;
 import com.hmdp.utils.UserHolder;
@@ -24,6 +25,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.hmdp.utils.RedisConstants.BLOG_LIKED_KEY;
+import static com.hmdp.utils.RedisConstants.USER_INBOX_KEY;
 
 /**
  * <p>
@@ -38,6 +40,9 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
 
     @Resource
     private IUserService userService;
+
+    @Resource
+    private IFollowService followService;
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -87,7 +92,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
     @Override
     public Result likes(Long id) {
         String key = BLOG_LIKED_KEY + id;
-        Set<String> userIdSet = stringRedisTemplate.opsForZSet().range(key, 0L, 4L);
+        Set<String> userIdSet = stringRedisTemplate.opsForZSet().reverseRange(key, 0L, 4L);
 
         if (userIdSet == null || userIdSet.isEmpty()) {
             return Result.ok(Collections.emptyList());
@@ -101,6 +106,20 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
                     .map(e -> BeanUtil.toBean(e, UserDTO.class))
                     .collect(Collectors.toList());
             return Result.ok(userDTOList);
+        }
+    }
+
+    @Override
+    public Result readNewBlogOfFollowee() {
+        Long userId = UserHolder.getUser().getId();
+        String key = USER_INBOX_KEY + userId;
+        Set<String> newBlogIds = stringRedisTemplate.opsForZSet().reverseRange(key, 0L, 10L);
+        stringRedisTemplate.delete(key);
+        if (newBlogIds.isEmpty()) {
+            return Result.ok(Collections.emptyList());
+        } else {
+            List<Blog> blogs = newBlogIds.stream().map(this::getById).collect(Collectors.toList());
+            return Result.ok(blogs);
         }
     }
 
@@ -119,6 +138,20 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
             if (score != null) {
                 blog.setIsLike(true);
             }
+        }
+    }
+
+    @Override
+    public boolean save(Blog entity) {
+        boolean saved = super.save(entity);
+        if (!saved) return false;
+        else {
+            Long userId = UserHolder.getUser().getId();
+            List<Long> followerIds = followService.findAllFollowerIds(userId);
+            ZSetOperations<String, String> zset = stringRedisTemplate.opsForZSet();
+            String blogId = entity.getId().toString();
+            followerIds.forEach(id -> zset.add(USER_INBOX_KEY + id, blogId, System.currentTimeMillis()));
+            return true;
         }
     }
 }

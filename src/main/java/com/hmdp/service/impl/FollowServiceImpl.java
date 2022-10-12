@@ -77,7 +77,9 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
     private void checkCache(Long id) {
         String key = USER_FOLLOW_KEY + id;
         if (!stringRedisTemplate.hasKey(key)) {
-            List<Follow> follows = query().eq("user_id", id).list();
+            QueryWrapper<Follow> wrapper = new QueryWrapper<>();
+            wrapper.eq("user_id", id).select("follow_user_id");
+            List<Follow> follows = getBaseMapper().selectList(wrapper);
             follows.forEach(e -> setOperations.add(key, e.getFollowUserId().toString()));
         }
     }
@@ -97,5 +99,21 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
                 .stream()
                 .map(e -> BeanUtil.toBean(e, UserDTO.class))
                 .collect(Collectors.toList()));
+    }
+
+    @Override
+    public List<Long> findAllFolloweeIds() {
+        Long id = UserHolder.getUser().getId();
+        checkCache(id);
+        return setOperations.members(USER_FOLLOW_KEY + id)
+                .stream()
+                .map(Long::valueOf)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Long> findAllFollowerIds(Long userId) {
+        List<Follow> followers = query().eq("follow_user_id", userId).list();
+        return followers.stream().map(Follow::getUserId).collect(Collectors.toList());
     }
 }

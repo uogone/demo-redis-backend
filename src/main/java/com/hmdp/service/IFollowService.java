@@ -1,8 +1,10 @@
 package com.hmdp.service;
 
+import com.baomidou.mybatisplus.extension.service.IService;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Follow;
-import com.baomidou.mybatisplus.extension.service.IService;
+
+import java.util.List;
 
 /**
  * <p>
@@ -19,4 +21,8 @@ public interface IFollowService extends IService<Follow> {
     Result followOrNot(Long id);
 
     Result commonFollows(Long id);
+
+    List<Long> findAllFolloweeIds();
+
+    List<Long> findAllFollowerIds(Long userId);
 }

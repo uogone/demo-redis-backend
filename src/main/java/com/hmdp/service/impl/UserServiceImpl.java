@@ -11,7 +11,6 @@ import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
-import com.hmdp.utils.RegexUtils;
 import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.HashOperations;
@@ -49,9 +48,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Override
     public Result sendCode(String phone) {
         // 验证手机号
-        if(RegexUtils.isPhoneInvalid(phone)) {
-            return Result.fail("手机号不正确");
-        }
+//        if(RegexUtils.isPhoneInvalid(phone)) {
+//            return Result.fail("手机号无效");
+//        }// TODO
 
         // 生成验证码并保存1分钟
         String code = RandomUtil.randomNumbers(6);
