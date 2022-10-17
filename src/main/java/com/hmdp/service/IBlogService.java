@@ -1,8 +1,11 @@
 package com.hmdp.service;
 
-import com.hmdp.dto.Result;
-import com.hmdp.entity.Blog;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.hmdp.entity.Blog;
+
+import java.util.List;
+import java.util.Optional;
 
 /**
  * <p>
@@ -14,13 +17,18 @@ import com.baomidou.mybatisplus.extension.service.IService;
  */
 public interface IBlogService extends IService<Blog> {
 
-    Result findHotBlog(Integer current);
+    Page<Blog> findHotBlog(Integer current);
 
-    Result findById(Long id);
+    Optional<Blog> findById(Long id);
 
-    Result like(Long id);
+    /**
+     *
+     * @param id
+     * @return true: 点赞成功 false: 取消点赞成功
+     */
+    Boolean like(Long id);
 
-    Result likes(Long id);
+    Page<Blog> findBlogOfUser(Long userId, Integer pageNo);
 
-    Result readNewBlogOfFollowee();
+    List<Blog> readNewBlogOfFollowee(Long lastId);
 }

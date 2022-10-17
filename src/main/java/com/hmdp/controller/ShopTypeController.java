@@ -1,13 +1,15 @@
 package com.hmdp.controller;
 
 
-import com.hmdp.dto.Result;
+import com.hmdp.entity.ShopType;
 import com.hmdp.service.IShopTypeService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import java.util.List;
 
 /**
  * <p>
@@ -24,7 +26,7 @@ public class ShopTypeController {
     private IShopTypeService typeService;
 
     @GetMapping("list")
-    public Result queryTypeList() {
-        return typeService.findAllType();
+    public ResponseEntity<List<ShopType>> queryTypeList() {
+        return ResponseEntity.ok(typeService.findAllType());
     }
 }

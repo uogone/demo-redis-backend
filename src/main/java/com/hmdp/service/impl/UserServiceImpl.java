@@ -4,9 +4,9 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.LoginFormDTO;
-import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
@@ -19,9 +19,14 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
+import static com.hmdp.utils.RedisConstants.BLOG_LIKED_KEY;
 import static com.hmdp.utils.RedisConstants.LOGIN_USER_KEY;
 
 /**
@@ -46,7 +51,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     StringRedisTemplate stringRedisTemplate;
 
     @Override
-    public Result sendCode(String phone) {
+    public List<UserDTO> findLikedUserOfBolg(Long blogId) {
+        String key = BLOG_LIKED_KEY + blogId;
+        // 只显示10个头像
+        Set<String> userIdSet = stringRedisTemplate.opsForZSet().reverseRange(key, 0L, 10L);
+        if (userIdSet.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Long> userIdList = userIdSet.stream().map(Long::valueOf).collect(Collectors.toList());
+        return query()
+                .in("id", userIdList)
+                .last("order by field(id," + StrUtil.join(",", userIdList) + ")")
+                .list()
+                .stream()
+                .map(e -> BeanUtil.toBean(e, UserDTO.class))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Boolean sendCode(String phone) {
         // 验证手机号
 //        if(RegexUtils.isPhoneInvalid(phone)) {
 //            return Result.fail("手机号无效");
@@ -58,20 +81,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
         // 发送验证码
         log.debug("Login code for " + phone + " is " + code);
-        return Result.ok();
+        return true;
     }
 
     @Override
-    public Result registerOrLogin(LoginFormDTO loginForm) {
+    public String registerOrLogin(LoginFormDTO loginForm) {
         String phone = loginForm.getPhone();
         String code = loginForm.getCode();
         if(phone == null || code == null) {
-            return Result.fail("手机号或验证码为空");
+            return "手机号或验证码为空";
         }
 
         String rightCode = stringValueOperations.get("login:code:" + phone);
         if(!code.equals(rightCode)) {
-            return Result.fail("验证码不正确");
+            return "验证码不正确";
         }
 
         User user = query().eq("phone", phone).one();
@@ -90,13 +113,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
                         .ignoreNullValue()
                         .setFieldValueEditor((field, value) -> value.toString())));
         stringRedisTemplate.expire("login:token:"  + token, 30L, TimeUnit.MINUTES);
-        return Result.ok(token);
+        return "token:" + token;
     }
 
     @Override
-    public Result logout() {
+    public void logout() {
         stringRedisTemplate.delete(LOGIN_USER_KEY + UserHolder.getUser().getId());
         UserHolder.removeUser();
-        return Result.ok();
     }
 }

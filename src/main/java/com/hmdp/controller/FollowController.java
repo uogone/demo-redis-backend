@@ -1,11 +1,13 @@
 package com.hmdp.controller;
 
 
-import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.service.IFollowService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.util.List;
 
 /**
  * <p>
@@ -23,17 +25,17 @@ public class FollowController {
     private IFollowService followService;
 
     @GetMapping("/or/not/{id}")
-    public Result follow(@PathVariable Long id) {
-        return followService.followOrNot(id);
+    public ResponseEntity<Boolean> followOrNot(@PathVariable Long id) {
+        return ResponseEntity.ok(followService.followOrNot(id));
     }
 
-    @PutMapping("/{id}/{follow}")
-    public Result follow(@PathVariable Long id, @PathVariable Boolean follow) {
-        return followService.follow(id, follow);
+    @PutMapping("/{id}")
+    public ResponseEntity<Boolean> follow(@PathVariable Long id) {
+        return ResponseEntity.ok(followService.follow(id));
     }
 
-    @GetMapping("/common/{id}")
-    public Result commonFollows(@PathVariable Long id) {
-        return followService.commonFollows(id);
+    @GetMapping("/common/{otherId}")
+    public ResponseEntity<List<UserDTO>> findCommonFollowee(@PathVariable Long otherId) {
+        return ResponseEntity.ok(followService.commonFollows(otherId));
     }
 }

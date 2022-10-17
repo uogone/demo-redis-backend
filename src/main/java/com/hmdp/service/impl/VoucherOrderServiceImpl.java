@@ -2,7 +2,6 @@ package com.hmdp.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.dto.Result;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
@@ -96,7 +95,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @Override
     @Transactional
-    public Result seckill(Long voucherId) {
+    public String seckill(Long voucherId) {
         // 检查时间
         DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
         String key = SECKILL_INFO_KEY + voucherId;
@@ -106,9 +105,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 hashOperations.get(key, "endTime"), formatter);
         LocalDateTime now = LocalDateTime.now();
         if (now.isBefore(beginTime)) {
-            return Result.fail("秒杀尚未开始");
+            return "秒杀尚未开始";
         } else if (now.isAfter(endTime)) {
-            return Result.fail("秒杀已结束");
+            return "秒杀已结束";
         }
         Long userId = UserHolder.getUser().getId();
         Long orderId = redisIdWorker.nextId("order");
@@ -118,9 +117,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 Collections.emptyList(),
                 userId.toString(), voucherId.toString(), orderId.toString());
         if (result != 0) {
-            return Result.fail(result == 1 ? "库存不足" : "你已拥有该优惠券");
+            return result == 1 ? "库存不足" : "你已拥有该优惠券";
         } else {
-            return Result.ok(orderId);
+            return "抢购成功";
         }
     }
 }

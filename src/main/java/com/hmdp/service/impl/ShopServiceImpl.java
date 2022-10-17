@@ -2,17 +2,19 @@ package com.hmdp.service.impl;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
+import com.hmdp.utils.SystemConstants;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static com.hmdp.utils.RedisConstants.*;
@@ -36,12 +38,9 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     @Override
     @Transactional
-    public Result findById(Long id) {
+    public Optional<Shop> findById(Long id) {
         Shop shop = queryShopWithMutex(id);
-        if(shop == null) {
-            return Result.fail("店铺不存在");
-        }
-        return Result.ok(shop);
+        return Optional.ofNullable(shop);
     }
 
     /**
@@ -86,13 +85,23 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     @Override
     @Transactional
-    public Result update(Shop shop) {
+    public Boolean update(Shop shop) {
         Long id = shop.getId();
-        if(id == null) {
-            return Result.fail("Shop ID不能为空");
-        }
         updateById(shop);
         stringRedisTemplate.delete(CACHE_SHOP_KEY + id);
-        return Result.ok();
+        return true;
+    }
+
+    @Override
+    public Page<Shop> findByType(Integer typeId, Integer pageNo) {
+        return query()
+                .eq("type_id", typeId)
+                .page(new Page<>(pageNo, SystemConstants.DEFAULT_PAGE_SIZE));
+    }
+
+    @Override
+    public Page<Shop> findByName(String name, Integer pageNo) {
+        return query().like(StrUtil.isNotBlank(name), "name", name)
+                .page(new Page<>(pageNo, SystemConstants.MAX_PAGE_SIZE));
     }
 }

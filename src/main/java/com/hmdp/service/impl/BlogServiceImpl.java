@@ -1,10 +1,7 @@
 package com.hmdp.service.impl;
 
-import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Blog;
 import com.hmdp.entity.User;
@@ -19,8 +16,8 @@ import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -48,30 +45,26 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
     private StringRedisTemplate stringRedisTemplate;
 
     @Override
-    public Result findHotBlog(Integer current) {
-        // 根据用户查询
+    public Page<Blog> findHotBlog(Integer pageNo) {
         Page<Blog> page = query()
                 .orderByDesc("liked")
-                .page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
-        // 获取当前页数据
-        List<Blog> records = page.getRecords();
+                .page(new Page<>(pageNo, SystemConstants.MAX_PAGE_SIZE));
         // 填充用户信息
-        records.forEach(this::fillBlogWithUserInfo);
-        return Result.ok(records);
+        page.getRecords().forEach(this::fillBlogWithUserInfo);
+        return page;
     }
 
     @Override
-    public Result findById(Long id) {
+    public Optional<Blog> findById(Long id) {
         Blog blog = query().eq("id", id).one();
-        if (blog == null) {
-            return Result.fail("文章不存在");
+        if (blog != null) {
+            fillBlogWithUserInfo(blog);
         }
-        fillBlogWithUserInfo(blog);
-        return Result.ok(blog);
+        return Optional.ofNullable(blog);
     }
 
     @Override
-    public Result like(Long id) {
+    public Boolean like(Long id) {
         ZSetOperations<String, String> ops = stringRedisTemplate.opsForZSet();
         String userId = UserHolder.getUser().getId().toString();
         String key = BLOG_LIKED_KEY + id;
@@ -80,47 +73,31 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
             // 取消点赞
             ops.remove(key, userId);
             update().setSql("liked = liked - 1").eq("id", id).update();
-            return Result.ok("取消成功");
+            return false;
         } else {
             // 点赞
             ops.add(key, userId, System.currentTimeMillis());
             update().setSql("liked = liked + 1").eq("id", id).update();
-            return Result.ok("点赞成功");
+            return true;
         }
     }
 
     @Override
-    public Result likes(Long id) {
-        String key = BLOG_LIKED_KEY + id;
-        Set<String> userIdSet = stringRedisTemplate.opsForZSet().reverseRange(key, 0L, 4L);
-
-        if (userIdSet == null || userIdSet.isEmpty()) {
-            return Result.ok(Collections.emptyList());
-        } else {
-            List<Long> userIdList = userIdSet.stream().map(Long::valueOf).collect(Collectors.toList());
-            List<UserDTO> userDTOList = userService.query()
-                    .in("id", userIdList)
-                    .last("order by field(id," + StrUtil.join(",", userIdList) + ")")
-                    .list()
-                    .stream()
-                    .map(e -> BeanUtil.toBean(e, UserDTO.class))
-                    .collect(Collectors.toList());
-            return Result.ok(userDTOList);
-        }
+    public Page<Blog> findBlogOfUser(Long userId, Integer pageNo) {
+        return query()
+                .eq("user_id", userId)
+                .page(new Page<>(pageNo, SystemConstants.MAX_PAGE_SIZE));
     }
 
     @Override
-    public Result readNewBlogOfFollowee() {
+    public List<Blog> readNewBlogOfFollowee(Long lastId) {
         Long userId = UserHolder.getUser().getId();
         String key = USER_INBOX_KEY + userId;
-        Set<String> newBlogIds = stringRedisTemplate.opsForZSet().reverseRange(key, 0L, 10L);
+        Set<String> newBlogIds = stringRedisTemplate.opsForZSet()
+                .reverseRange(key, 0L, SystemConstants.MAX_PAGE_SIZE);
         stringRedisTemplate.delete(key);
-        if (newBlogIds.isEmpty()) {
-            return Result.ok(Collections.emptyList());
-        } else {
-            List<Blog> blogs = newBlogIds.stream().map(this::getById).collect(Collectors.toList());
-            return Result.ok(blogs);
-        }
+        // 动态推送问题
+        return newBlogIds.stream().map(this::getById).collect(Collectors.toList());
     }
 
     private void fillBlogWithUserInfo(Blog blog) {

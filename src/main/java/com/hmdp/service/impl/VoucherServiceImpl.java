@@ -1,7 +1,6 @@
 package com.hmdp.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.dto.Result;
 import com.hmdp.entity.SeckillVoucher;
 import com.hmdp.entity.Voucher;
 import com.hmdp.mapper.VoucherMapper;
@@ -39,11 +38,8 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
     private HashOperations<String, String, String> hashOperations;
 
     @Override
-    public Result queryVoucherOfShop(Long shopId) {
-        // 查询优惠券信息
-        List<Voucher> vouchers = getBaseMapper().queryVoucherOfShop(shopId);
-        // 返回结果
-        return Result.ok(vouchers);
+    public List<Voucher> queryVoucherOfShop(Long shopId) {
+        return getBaseMapper().queryVoucherOfShop(shopId);
     }
 
     @Override

@@ -2,14 +2,15 @@ package com.hmdp.controller;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
-import com.hmdp.dto.Result;
 import com.hmdp.utils.SystemConstants;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.UUID;
 
 @Slf4j
@@ -18,7 +19,7 @@ import java.util.UUID;
 public class UploadController {
 
     @PostMapping("blog")
-    public Result uploadImage(@RequestParam("file") MultipartFile image) {
+    public ResponseEntity<String> uploadImage(@RequestParam("file") MultipartFile image) {
         try {
             // 获取原始文件名称
             String originalFilename = image.getOriginalFilename();
@@ -28,20 +29,25 @@ public class UploadController {
             image.transferTo(new File(SystemConstants.IMAGE_UPLOAD_DIR, fileName));
             // 返回结果
             log.debug("文件上传成功，{}", fileName);
-            return Result.ok(fileName);
+            return ResponseEntity.ok(fileName);
         } catch (IOException e) {
             throw new RuntimeException("文件上传失败", e);
         }
     }
 
     @GetMapping("/blog/delete")
-    public Result deleteBlogImg(@RequestParam("name") String filename) {
+    public ResponseEntity<HashMap<String, Object>> deleteBlogImg(@RequestParam("name") String filename) {
         File file = new File(SystemConstants.IMAGE_UPLOAD_DIR, filename);
+        HashMap<String, Object> body = new HashMap<>();
         if (file.isDirectory()) {
-            return Result.fail("错误的文件名称");
+            body.put("success", false);
+            body.put("msg", "无法删除，该文件是文件夹");
+        } else {
+            FileUtil.del(file);
+            body.put("success", true);
+            body.put("msg", filename);
         }
-        FileUtil.del(file);
-        return Result.ok();
+        return ResponseEntity.ok(body);
     }
 
     private String createNewFileName(String originalFilename) {

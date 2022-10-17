@@ -35,17 +35,15 @@ public class Follow implements Serializable {
     /**
      * 用户id
      */
-    private Long userId;
+    private Long followerId;
 
     /**
-     * 关联的用户id
+     * 被关注用户id
      */
-    private Long followUserId;
+    private Long followeeId;
 
     /**
      * 创建时间
      */
     private LocalDateTime createTime;
-
-
 }

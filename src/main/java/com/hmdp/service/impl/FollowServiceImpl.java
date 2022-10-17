@@ -3,10 +3,8 @@ package com.hmdp.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Follow;
-import com.hmdp.entity.User;
 import com.hmdp.mapper.FollowMapper;
 import com.hmdp.service.IFollowService;
 import com.hmdp.service.IUserService;
@@ -21,7 +19,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static com.hmdp.utils.RedisConstants.USER_FOLLOW_KEY;
+import static com.hmdp.utils.RedisConstants.User_Followee_KEY;
 
 /**
  * <p>
@@ -44,68 +42,69 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
     private IUserService userService;
 
     @Override
-    public Result follow(Long authorId, Boolean follow) {
-        Long fansId = UserHolder.getUser().getId();
-        if (follow) {
-            Follow f = new Follow();
-            f.setUserId(fansId);
-            f.setFollowUserId(authorId);
-            save(f);
-            String key = USER_FOLLOW_KEY + fansId;
-            setOperations.add(key, authorId.toString());
-        } else {
+    public Boolean follow(Long id) {
+        Long followerId = UserHolder.getUser().getId();
+        checkCache(followerId);
+        String key = User_Followee_KEY + followerId;
+        if (setOperations.isMember(key, id.toString())) {
             QueryWrapper<Follow> wrapper = new QueryWrapper<>();
-            wrapper.eq("user_id", fansId).eq("follow_user_id", authorId);
+            wrapper.eq("follower_id", followerId).eq("followee_id", id);
             remove(wrapper);
-            setOperations.remove(USER_FOLLOW_KEY + fansId, authorId.toString());
+            setOperations.remove(User_Followee_KEY + followerId, id.toString());
+            return false;
+        } else {
+            Follow f = new Follow();
+            f.setFollowerId(followerId);
+            f.setFolloweeId(id);
+            save(f);
+            setOperations.add(key, id.toString());
+            return true;
         }
-        return Result.ok();
     }
 
     @Override
-    public Result followOrNot(Long id) {
-        Long fansId = UserHolder.getUser().getId();
-        String key = USER_FOLLOW_KEY + fansId;
-        checkCache(fansId);
-        return Result.ok(setOperations.isMember(key, id.toString()));
+    public Boolean followOrNot(Long id) {
+        Long followerId = UserHolder.getUser().getId();
+        String key = User_Followee_KEY + followerId;
+        checkCache(followerId);
+        return setOperations.isMember(key, id.toString());
     }
 
     /**
      * 检查是否缓存该用户的关注列表
-     * @param id 用户id
+     * @param followerId 用户id
      */
-    private void checkCache(Long id) {
-        String key = USER_FOLLOW_KEY + id;
+    private void checkCache(Long followerId) {
+        String key = User_Followee_KEY + followerId;
         if (!stringRedisTemplate.hasKey(key)) {
             QueryWrapper<Follow> wrapper = new QueryWrapper<>();
-            wrapper.eq("user_id", id).select("follow_user_id");
+            wrapper.eq("follower_id", followerId).select("followee_id");
             List<Follow> follows = getBaseMapper().selectList(wrapper);
-            follows.forEach(e -> setOperations.add(key, e.getFollowUserId().toString()));
+            follows.forEach(e -> setOperations.add(key, e.getFolloweeId().toString()));
         }
     }
 
     @Override
-    public Result commonFollows(Long id) {
-        Long fansId = UserHolder.getUser().getId();
+    public List<UserDTO> commonFollows(Long otherId) {
+        Long id = UserHolder.getUser().getId();
         checkCache(id);
-        checkCache(fansId);
-        Set<String> commonIds = setOperations.intersect(USER_FOLLOW_KEY + fansId, USER_FOLLOW_KEY + id);
-        if (commonIds == null || commonIds.isEmpty()) {
-            return Result.ok(Collections.emptyList());
+        checkCache(otherId);
+        Set<String> commonIds = setOperations.intersect(User_Followee_KEY + id, User_Followee_KEY + otherId);
+        if (commonIds.isEmpty()) {
+            return Collections.emptyList();
         }
         List<Long> ids = commonIds.stream().map(Long::valueOf).collect(Collectors.toList());
-        List<User> commonFollows = userService.listByIds(ids);
-        return Result.ok(commonFollows
+        return userService.listByIds(ids)
                 .stream()
                 .map(e -> BeanUtil.toBean(e, UserDTO.class))
-                .collect(Collectors.toList()));
+                .collect(Collectors.toList());
     }
 
     @Override
     public List<Long> findAllFolloweeIds() {
         Long id = UserHolder.getUser().getId();
         checkCache(id);
-        return setOperations.members(USER_FOLLOW_KEY + id)
+        return setOperations.members(User_Followee_KEY + id)
                 .stream()
                 .map(Long::valueOf)
                 .collect(Collectors.toList());
@@ -113,7 +112,7 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
 
     @Override
     public List<Long> findAllFollowerIds(Long userId) {
-        List<Follow> followers = query().eq("follow_user_id", userId).list();
-        return followers.stream().map(Follow::getUserId).collect(Collectors.toList());
+        List<Follow> followers = query().eq("followee_id", userId).list();
+        return followers.stream().map(Follow::getFollowerId).collect(Collectors.toList());
     }
 }

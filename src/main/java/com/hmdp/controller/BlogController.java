@@ -2,16 +2,14 @@ package com.hmdp.controller;
 
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Blog;
 import com.hmdp.service.IBlogService;
-import com.hmdp.utils.SystemConstants;
 import com.hmdp.utils.UserHolder;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
-import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -30,65 +28,50 @@ public class BlogController {
     private IBlogService blogService;
 
     @PostMapping
-    public Result saveBlog(@RequestBody Blog blog) {
+    public ResponseEntity<Long> saveBlog(@RequestBody Blog blog) {
         // 获取登录用户
         UserDTO user = UserHolder.getUser();
         blog.setUserId(user.getId());
         // 保存探店博文
         blogService.save(blog);
         // 返回id
-        return Result.ok(blog.getId());
+        return ResponseEntity.ok(blog.getId());
     }
 
     @PutMapping("/like/{id}")
-    public Result likeBlog(@PathVariable("id") Long id) {
-        return blogService.like(id);
+    public ResponseEntity<Boolean> likeBlog(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(blogService.like(id));
     }
 
     @GetMapping("/of/me")
-    public Result queryMyBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
+    public ResponseEntity<List<Blog>> queryMyBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
         // 获取登录用户
-        UserDTO user = UserHolder.getUser();
+        Long userId = UserHolder.getUser().getId();
         // 根据用户查询
-        Page<Blog> page = blogService.query()
-                .eq("user_id", user.getId()).page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
-        // 获取当前页数据
-        List<Blog> records = page.getRecords();
-        return Result.ok(records);
+        Page<Blog> page = blogService.findBlogOfUser(userId, current);
+        return ResponseEntity.ok(page.getRecords());
     }
 
     @GetMapping("/hot")
-    public Result queryHotBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
-        return blogService.findHotBlog(current);
+    public ResponseEntity<List<Blog>> queryHotBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
+        Page<Blog> page = blogService.findHotBlog(current);
+        return ResponseEntity.ok(page.getRecords());
     }
 
     @GetMapping("/{id}")
-    public Result getBlog(@PathVariable Long id) {
-        return blogService.findById(id);
-    }
-
-    @GetMapping("/likes/{id}")
-    public Result likes(@PathVariable Long id) {
-        return blogService.likes(id);
+    public ResponseEntity<Blog> getBlog(@PathVariable Long id) {
+        return ResponseEntity.of(blogService.findById(id));
     }
 
     @GetMapping("/of/user")
-    public Result queryBlogByUserId(
+    public ResponseEntity<List<Blog>> queryBlogByUserId(
             @RequestParam(value = "current", defaultValue = "1") Integer current,
             @RequestParam("id") Long id) {
-        // 根据用户查询
-        Page<Blog> page = blogService.query()
-                .eq("user_id", id).page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
-        // 获取当前页数据
-        List<Blog> records = page.getRecords();
-        return Result.ok(records);
+        return ResponseEntity.ok(blogService.findBlogOfUser(id, current).getRecords());
     }
 
     @GetMapping("/of/follow")
-    public Result queryBlogOfFollowee() {
-        Result result = blogService.readNewBlogOfFollowee();
-        HashMap<String, Object> map = new HashMap<>();
-        map.put("list", result.getData());
-        return Result.ok(map);
+    public ResponseEntity<List<Blog>> getBlogOfFollowee(@RequestParam Long lastId) {
+        return ResponseEntity.ok(blogService.readNewBlogOfFollowee(lastId));
     }
 }
